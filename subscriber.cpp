@@ -1,0 +1,71 @@
+#include "rclcpp/rclcpp.hpp"
+#include "bupt_rc_cv_interfaces/msg/cv_cameras.hpp"
+#include <opencv2/opencv.hpp>
+#include <termios.h>
+#include <unistd.h>
+
+int exit_flag = 0;
+
+class CamerasSubscriber : public rclcpp::Node {
+     
+public:
+    CamerasSubscriber() : Node("cameras_subscriber") {
+        cv::namedWindow("Cam", cv::WINDOW_NORMAL);
+        auto topic_callback = [] (const bupt_rc_cv_interfaces::msg::CVCameras::SharedPtr msg){
+            cv::Mat frame(msg->frame_height, msg->frame_width, CV_8UC3, msg->frame_data.data());
+            cv::imshow("Cam", frame);
+            if (cv::waitKey(1) == 'q')
+                exit_flag = 1;
+        };
+        subscription_ = this->create_subscription<bupt_rc_cv_interfaces::msg::CVCameras>("topic", 10, topic_callback);
+    }
+
+    ~CamerasSubscriber() {
+        std::cout << "All windows has been destroyed" << std::endl;
+        cv::destroyAllWindows();
+    }
+
+    void spin(){
+        struct termios old_settings, new_settings;
+
+        tcgetattr(STDIN_FILENO, &old_settings);
+        new_settings = old_settings;
+        new_settings.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &new_settings);
+
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            if (kbhit()) {
+                if (exit_flag == 1)
+                    break;
+            }
+        }
+        tcsetattr(STDIN_FILENO, TCSANOW, &old_settings);
+    }
+private:
+    int kbhit(){
+        struct timeval tv;
+        fd_set read_fd;
+
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+        FD_ZERO(&read_fd);
+        FD_SET(STDIN_FILENO, &read_fd);
+
+        if (select(STDIN_FILENO + 1, &read_fd, nullptr, nullptr, &tv) == -1) {
+          return 0;
+        }
+
+        return FD_ISSET(STDIN_FILENO, &read_fd);
+    }
+private:
+    rclcpp::Subscription<bupt_rc_cv_interfaces::msg::CVCameras>::SharedPtr subscription_;
+};
+
+int main(int argc, char* argv[]) {
+    rclcpp::init(argc, argv);
+    CamerasSubscriber node_cam_subscriber;
+    node_cam_subscriber.spin();
+    rclcpp::shutdown();
+    return 0;
+}
