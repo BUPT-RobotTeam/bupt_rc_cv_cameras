@@ -34,6 +34,9 @@ add_executable(cameras_publisher
 add_executable(cameras_subscriber
     subscriber.cpp
 )
+add_executable(cameras_client
+    client.cpp
+)
 
 
 # publisher 库链接
@@ -46,17 +49,25 @@ target_link_libraries(cameras_publisher
 
 ament_target_dependencies(cameras_publisher rclcpp bupt_rc_cv_interfaces)
 
+# subscriber 库连接
 target_link_libraries(cameras_subscriber
     ${OpenCV_LIBS}
 )
 ament_target_dependencies(cameras_subscriber rclcpp bupt_rc_cv_interfaces)
 
 
+# client 库链接
+ament_target_dependencies(cameras_client rclcpp bupt_rc_cv_interfaces)
+
 install(TARGETS cameras_publisher
     DESTINATION lib/${PROJECT_NAME}
 )
 
 install(TARGETS cameras_subscriber
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS cameras_client
     DESTINATION lib/${PROJECT_NAME}
 )
 
