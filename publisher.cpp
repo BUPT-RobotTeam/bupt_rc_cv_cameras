@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
     CAMERAS_CHECK(cam.open(), "camera open error");
     CAMERAS_CHECK(cam.start(), "camera start error");
     std::cout << "-----------------------------------------------------------" << std::endl;
-    std::cout << "|                   express [q] to exit                   |" << std::endl;
+    std::cout << "|                    press [q] to exit                    |" << std::endl;
     std::cout << "-----------------------------------------------------------" << std::endl;
     CameraPublisher node_cam_publisher(cam);
     node_cam_publisher.spin();

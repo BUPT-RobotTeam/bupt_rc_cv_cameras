@@ -4,7 +4,6 @@
 #include <termios.h>
 #include <unistd.h>
 
-int exit_flag = 0;
 
 class CamerasSubscriber : public rclcpp::Node {
      
@@ -14,8 +13,7 @@ public:
         auto topic_callback = [] (const bupt_rc_cv_interfaces::msg::CVCameras::SharedPtr msg){
             cv::Mat frame(msg->frame_height, msg->frame_width, CV_8UC3, msg->frame_data.data());
             cv::imshow("Cam", frame);
-            if (cv::waitKey(1) == 'q')
-                exit_flag = 1;
+            cv::waitKey(1);
         };
         subscription_ = this->create_subscription<bupt_rc_cv_interfaces::msg::CVCameras>("topic", 10, topic_callback);
     }
@@ -26,6 +24,7 @@ public:
     }
 
     void spin(){
+        int key;
         struct termios old_settings, new_settings;
 
         tcgetattr(STDIN_FILENO, &old_settings);
@@ -36,8 +35,10 @@ public:
         while (rclcpp::ok()) {
             rclcpp::spin_some(this->get_node_base_interface());
             if (kbhit()) {
-                if (exit_flag == 1)
-                    break;
+                key = getchar();
+                if (key == 'q') {
+                    break;  // 按下 'q' 键退出循环
+                }
             }
         }
         tcsetattr(STDIN_FILENO, TCSANOW, &old_settings);
@@ -65,6 +66,9 @@ private:
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
     CamerasSubscriber node_cam_subscriber;
+    std::cout << "-----------------------------------------------------------" << std::endl;
+    std::cout << "|                    press [q] to exit                    |" << std::endl;
+    std::cout << "-----------------------------------------------------------" << std::endl;
     node_cam_subscriber.spin();
     rclcpp::shutdown();
     return 0;
