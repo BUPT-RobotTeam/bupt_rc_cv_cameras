@@ -24,11 +24,11 @@ public:
 
             message.cam_type = cam.get_cam_type();                          // 获取相机的类型
             cv::Mat frame = cam.get_frame();                                // 获取该帧数据
-            message.frame_width = frame.cols;                               // 获取数据帧的宽
-            message.frame_height = frame.rows;                              // 获取数据帧的高
+            message.img.frame_width = frame.cols;                               // 获取数据帧的宽
+            message.img.frame_height = frame.rows;                              // 获取数据帧的高
             message.cam_fps = cam.get_fps();                                // 获取相机的帧数
             // 装载图片数据
-            message.frame_data.assign(frame.data, frame.data + frame.total() * frame.elemSize()); 
+            message.img.frame_data.assign(frame.data, frame.data + frame.total() * frame.elemSize()); 
             // 发布
             publisher_->publish(message);
         };

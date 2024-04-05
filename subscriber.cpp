@@ -14,7 +14,7 @@ public:
         cv::namedWindow("Cam", cv::WINDOW_NORMAL);
         auto topic_callback = [] (const bupt_rc_cv_interfaces::msg::CVCameras::SharedPtr msg){
             // 加载图像数据
-            cv::Mat frame(msg->frame_height, msg->frame_width, CV_8UC3, msg->frame_data.data());
+            cv::Mat frame(msg->img.frame_height, msg->img.frame_width, CV_8UC3, msg->img.frame_data.data());
             // 显示帧数
             cv::putText(frame, "FPS: " + std::to_string(msg->cam_fps), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
             cv::imshow("Cam", frame);
@@ -66,26 +66,8 @@ private:
         return FD_ISSET(STDIN_FILENO, &read_fd);
     }
 
-    void send_depth_request() {
-        auto request = std::make_shared<bupt_rc_cv_interfaces::srv::CVDepth::Request>();
-        request->x = 300;
-        request->y = 300;
-
-        // 发送Service请求
-        auto future = client_->async_send_request(request);
-
-        // 等待响应
-        if (rclcpp::spin_until_future_complete(shared_from_this(), future) == rclcpp::FutureReturnCode::SUCCESS) {
-            auto response = future.get();
-            RCLCPP_INFO(get_logger(), "Received respose: %lf", response->depth);
-        }
-        else {
-            RCLCPP_ERROR(get_logger(), "Failed to receive response.");
-        }
-    }
 private:
     rclcpp::Subscription<bupt_rc_cv_interfaces::msg::CVCameras>::SharedPtr subscription_;
-    rclcpp::Client<bupt_rc_cv_interfaces::srv::CVDepth>::SharedPtr client_;
 };
 
 int main(int argc, char* argv[]) {
