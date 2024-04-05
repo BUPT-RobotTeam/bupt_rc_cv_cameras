@@ -13,9 +13,8 @@ using namespace std::chrono_literals;
 class CameraPublisher : public rclcpp::Node {
 public:
     CameraPublisher(cameras& cam) : rclcpp::Node("camera_publisher"), cam_(cam) {
-        publisher_ = this->create_publisher<bupt_rc_cv_interfaces::msg::CVCameras>("bupt_rc_cv/cameras", 10);
+        publisher_ = this->create_publisher<bupt_rc_cv_interfaces::msg::CVCameras>("bupt_rc_cv/cameras", 1);
 
-        // service_ = this->create_service<bupt_rc_cv_interfaces::srv::CVDepth>("bupt_rc_cv/cameras/depth", 10)
 
 
         // 时间回调函数，用于定时发送公共信息
@@ -41,7 +40,7 @@ public:
         };
 
         // 每10s发送一次
-        timer_ = this->create_wall_timer(10ms, timer_callback);
+        timer_ = this->create_wall_timer(20ms, timer_callback);
         service_ = this->create_service<bupt_rc_cv_interfaces::srv::CVDepth>("bupt_rc_cv/cameras/depth", depth_callback);
     }
 

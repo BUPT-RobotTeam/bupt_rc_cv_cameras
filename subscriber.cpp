@@ -20,7 +20,7 @@ public:
             cv::imshow("Cam", frame);
             cv::waitKey(1);
         };
-        subscription_ = this->create_subscription<bupt_rc_cv_interfaces::msg::CVCameras>("bupt_rc_cv/cameras", 10, topic_callback);
+        subscription_ = this->create_subscription<bupt_rc_cv_interfaces::msg::CVCameras>("bupt_rc_cv/cameras", 1, topic_callback);
     }
 
 
