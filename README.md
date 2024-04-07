@@ -33,3 +33,6 @@ set(MVCAM_COMMON_PATH /opt/MVS)
 ## 话题说明
 1. 图像话题发布于：bupt_rc_cv/cameras
 2. 深度信息的Service为: bupt_rc_cv/cameras/depth
+
+## 需要注意
+1. 本文件中使用的cameras类和队库中的有一点不同，具体体现在我把"摄像头类型(cam_type)"这个数据的数据类型该为了char, 队库中使用的是string
