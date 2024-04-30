@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
-#include "bupt_rc_cv_interfaces/msg/cv_cameras.hpp"
 #include "bupt_rc_cv_interfaces/srv/cv_depth.hpp"
+#include "bupt_rc_cv_interfaces/msg/cv_camera_array.hpp"
+#include "bupt_rc_cv_interfaces/msg/cv_camera.hpp"
 #include <opencv2/opencv.hpp>
 #include <termios.h>
 #include <unistd.h>
@@ -12,15 +13,17 @@ public:
     CamerasSubscriber() : Node("cameras_subscriber") {
         //------------------------------订阅图像数据------------------------------
         cv::namedWindow("Cam", cv::WINDOW_NORMAL);
-        auto topic_callback = [] (const bupt_rc_cv_interfaces::msg::CVCameras::SharedPtr msg){
-            // 加载图像数据
-            cv::Mat frame(msg->img.frame_height, msg->img.frame_width, CV_8UC3, msg->img.frame_data.data());
-            // 显示帧数
-            cv::putText(frame, "FPS: " + std::to_string(msg->cam_fps), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
-            cv::imshow("Cam", frame);
-            cv::waitKey(1);
+
+        auto topic_callback = [] (const bupt_rc_cv_interfaces::msg::CVCameraArray::SharedPtr msg){
+            for (auto camera : msg->cameras) {
+                cv::Mat frame(camera.img.frame_height, camera.img.frame_width, CV_8UC3, camera.img.frame_data.data());
+                cv::imshow(camera.cam_name, frame);
+                cv::putText(frame, "FPS: " + std::to_string(camera.cam_fps), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
+                cv::waitKey(1);
+            }
         };
-        subscription_ = this->create_subscription<bupt_rc_cv_interfaces::msg::CVCameras>("bupt_rc_cv/cameras", 1, topic_callback);
+
+        subscription_ = this->create_subscription<bupt_rc_cv_interfaces::msg::CVCameraArray>("bupt_rc_cv/cameras", 1, topic_callback);
     }
 
 
@@ -67,7 +70,7 @@ private:
     }
 
 private:
-    rclcpp::Subscription<bupt_rc_cv_interfaces::msg::CVCameras>::SharedPtr subscription_;
+    rclcpp::Subscription<bupt_rc_cv_interfaces::msg::CVCameraArray>::SharedPtr subscription_;
 };
 
 int main(int argc, char* argv[]) {
