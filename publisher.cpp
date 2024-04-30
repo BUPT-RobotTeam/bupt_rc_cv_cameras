@@ -1,52 +1,33 @@
-#include "include/cameras.hpp"
 #include <opencv2/opencv.hpp>
-#include <memory>
 #include <termios.h>
 #include <unistd.h>
+#include <string>
+#include <termio.h>
+#include "cameras.h"
 #include "rclcpp/rclcpp.hpp"
-#include "bupt_rc_cv_interfaces/msg/cv_cameras.hpp"
 #include "bupt_rc_cv_interfaces/srv/cv_depth.hpp"
+#include "bupt_rc_cv_interfaces/msg/cv_camera_array.hpp"
+
+
+//------------------------------default configuration------------------------------
+
+std::string config_path = "/home/bupt-rc/ros2_ws/bupt_rc_cv_ws/src/bupt_rc_cv_cameras/config.yaml";
 
 
 using namespace std::chrono_literals;
 
-class CameraPublisher : public rclcpp::Node {
+class CamerasPublisher : public rclcpp::Node {
 public:
-    CameraPublisher(cameras& cam) : rclcpp::Node("camera_publisher"), cam_(cam) {
-        publisher_ = this->create_publisher<bupt_rc_cv_interfaces::msg::CVCameras>("bupt_rc_cv/cameras", 1);
-
-
-
-        // 时间回调函数，用于定时发送公共信息
-        auto timer_callback = [this, &cam]() {
-            auto message = bupt_rc_cv_interfaces::msg::CVCameras();        
-
-            message.cam_type = cam.get_cam_type();                          // 获取相机的类型
-            cv::Mat frame = cam.get_frame();                                // 获取该帧数据
-            message.img.frame_width = frame.cols;                               // 获取数据帧的宽
-            message.img.frame_height = frame.rows;                              // 获取数据帧的高
-            message.cam_fps = cam.get_fps();                                // 获取相机的帧数
-            // 装载图片数据
-            message.img.frame_data.assign(frame.data, frame.data + frame.total() * frame.elemSize()); 
-            // 发布
-            publisher_->publish(message);
-        };
-
-
-        // depth回调函数，用于返回depth信息
-        auto depth_callback = [this, &cam](const std::shared_ptr<bupt_rc_cv_interfaces::srv::CVDepth::Request> request, 
-                std::shared_ptr<bupt_rc_cv_interfaces::srv::CVDepth::Response> response) {
-            response->depth = cam.get_depth(request->x, request->y);
-        };
-
-        // 每10s发送一次
-        timer_ = this->create_wall_timer(20ms, timer_callback);
-        service_ = this->create_service<bupt_rc_cv_interfaces::srv::CVDepth>("bupt_rc_cv/cameras/depth", depth_callback);
+    CamerasPublisher(cameras* cam_01, cameras* cam_02) : rclcpp::Node("camera_publisher") {                                                                                    
+        this->publisher_ = this->create_publisher<bupt_rc_cv_interfaces::msg::CVCameraArray>("bupt_rc_cv/cameras", 1);
+        this->cam_01_ = cam_01;
+        this->cam_02_ = cam_02;
+        this->timer_ = this->create_wall_timer(10ms, std::bind(&CamerasPublisher::timer_callback, this));
     }
 
-    ~CameraPublisher() {
-        std::cout << "camera has been stopped" << std::endl;
-        this->cam_.stop();
+    ~CamerasPublisher() {
+        this->cam_01_->stop();
+        this->cam_02_->stop();
     }
 
     void spin(){
@@ -71,6 +52,35 @@ public:
     }
 
 private:
+    void timer_callback() {
+        auto message = bupt_rc_cv_interfaces::msg::CVCameraArray();
+
+        auto message_cam_01 = bupt_rc_cv_interfaces::msg::CVCamera();
+        auto message_cam_02 = bupt_rc_cv_interfaces::msg::CVCamera();
+
+        cv::Mat frame_01 = this->cam_01_->get_frame();
+        cv::Mat frame_02 = this->cam_02_->get_frame();
+        
+        message_cam_01.img.frame_data.assign(frame_01.data, frame_01.data + frame_01.total() * frame_01.elemSize());
+        message_cam_01.img.frame_width = frame_01.cols;
+        message_cam_01.img.frame_height = frame_01.rows;
+        message_cam_01.cam_fps = 30.0;
+        message_cam_01.cam_name = this->cam_01_->get_cam_name();
+        message_cam_01.cam_type = this->cam_01_->get_cam_type();
+
+        message_cam_02.img.frame_data.assign(frame_02.data, frame_02.data + frame_02.total() * frame_02.elemSize());
+        message_cam_02.img.frame_width = frame_02.cols;
+        message_cam_02.img.frame_height = frame_02.rows;
+        message_cam_02.cam_fps = 30.0;
+        message_cam_02.cam_name = this->cam_02_->get_cam_name();
+        message_cam_02.cam_type = this->cam_02_->get_cam_type();
+        
+        message.cameras.push_back(message_cam_01);
+        message.cameras.push_back(message_cam_02);
+
+        this->publisher_->publish(message);
+    }
+
     int kbhit(){
         struct timeval tv;
         fd_set read_fd;
@@ -88,25 +98,36 @@ private:
     }
 private:
     rclcpp::TimerBase::SharedPtr timer_;
-    rclcpp::Publisher<bupt_rc_cv_interfaces::msg::CVCameras>::SharedPtr publisher_;
-    rclcpp::Service<bupt_rc_cv_interfaces::srv::CVDepth>::SharedPtr service_;
-    cameras& cam_;
-
+    rclcpp::Publisher<bupt_rc_cv_interfaces::msg::CVCameraArray>::SharedPtr publisher_;
+    cameras* cam_01_;
+    cameras* cam_02_;
 };
 
 
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
 
-    cameras cam;
-    CAMERAS_CHECK(cam.open(), "camera open error");
-    CAMERAS_CHECK(cam.start(), "camera start error");
     std::cout << "-----------------------------------------------------------" << std::endl;
     std::cout << "|                    press [q] to exit                    |" << std::endl;
     std::cout << "-----------------------------------------------------------" << std::endl;
-    CameraPublisher node_cam_publisher(cam);
-    node_cam_publisher.spin();
 
-    rclcpp::shutdown();
+
+    // 打开和开启相机
+    try {
+        cameras cam_01(config_path);
+        CAMERAS_CHECK(cam_01.open(), cam_01.get_cam_name() + " open fail");
+        CAMERAS_CHECK(cam_01.start(), cam_01.get_cam_name() + "start fail");
+
+        cameras cam_02(config_path);
+        CAMERAS_CHECK(cam_02.open(), cam_02.get_cam_name() + " open fail");
+        CAMERAS_CHECK(cam_02.start(), cam_02.get_cam_name() + "start fail");
+        CamerasPublisher node_cams_publisher(&cam_01, &cam_02);
+
+        node_cams_publisher.spin();
+        rclcpp::shutdown();
+    }
+    catch (const std::exception& e) {
+        std::cout << "[BUPT_RC]Exception caught: " << e.what() << std::endl;
+    }
     return 0;
 }

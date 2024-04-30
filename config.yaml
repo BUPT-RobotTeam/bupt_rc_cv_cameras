@@ -1,0 +1,13 @@
+camera_name: camera_ball
+camera_type: usb_camera
+camera_fps: 30
+frame_width: 640
+frame_height: 480
+is_used: 0
+---
+camera_name: camera_seedlings
+camera_type: usb_camera
+camera_fps: 30
+frame_width: 640
+frame_height: 480
+is_used: 0
