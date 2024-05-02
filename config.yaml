@@ -1,13 +1,13 @@
 camera_name: camera_ball
-camera_type: usb_camera
-camera_fps: 30
-frame_width: 640
-frame_height: 480
-is_used: 0
+camera_type: hik_camera_mv_ca013_21uc
+camera_fps: 50
+frame_width: 1280
+frame_height: 1024
+is_used: 1
 ---
 camera_name: camera_seedlings
 camera_type: usb_camera
 camera_fps: 30
 frame_width: 640
 frame_height: 480
-is_used: 0
+is_used: 1

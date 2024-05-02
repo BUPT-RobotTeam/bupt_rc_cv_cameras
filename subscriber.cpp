@@ -12,13 +12,11 @@ class CamerasSubscriber : public rclcpp::Node {
 public:
     CamerasSubscriber() : Node("cameras_subscriber") {
         //------------------------------订阅图像数据------------------------------
-        cv::namedWindow("Cam", cv::WINDOW_NORMAL);
-
         auto topic_callback = [] (const bupt_rc_cv_interfaces::msg::CVCameraArray::SharedPtr msg){
             for (auto camera : msg->cameras) {
                 cv::Mat frame(camera.img.frame_height, camera.img.frame_width, CV_8UC3, camera.img.frame_data.data());
-                cv::imshow(camera.cam_name, frame);
                 cv::putText(frame, "FPS: " + std::to_string(camera.cam_fps), cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
+                cv::imshow(camera.cam_name, frame);
                 cv::waitKey(1);
             }
         };

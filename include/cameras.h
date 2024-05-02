@@ -76,6 +76,7 @@ public:
     static std::map<std::string, std::vector<int>> cam_frame_range;
     static std::map<std::string, std::vector<int>> cam_fps_range;
 
+
 private:
     // 相机类型相关
     hikcam cam_hik_;

@@ -46,6 +46,7 @@ target_link_libraries(cameras_publisher
     ${OpenCV_LIBS} 
     ${realsense2_LIBRARY}
     yaml-cpp::yaml-cpp
+    pthread
 )
 ament_target_dependencies(cameras_publisher rclcpp bupt_rc_cv_interfaces)
 

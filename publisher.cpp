@@ -3,31 +3,33 @@
 #include <unistd.h>
 #include <string>
 #include <termio.h>
+#include <chrono>
 #include "cameras.h"
 #include "rclcpp/rclcpp.hpp"
 #include "bupt_rc_cv_interfaces/srv/cv_depth.hpp"
 #include "bupt_rc_cv_interfaces/msg/cv_camera_array.hpp"
+#include <thread>
 
 
 //------------------------------default configuration------------------------------
 
 std::string config_path = "/home/bupt-rc/ros2_ws/bupt_rc_cv_ws/src/bupt_rc_cv_cameras/config.yaml";
-
+bool capture_frame_stop = false;
 
 using namespace std::chrono_literals;
 
-class CamerasPublisher : public rclcpp::Node {
+class Publisher : public rclcpp :: Node {
 public:
-    CamerasPublisher(cameras* cam_01, cameras* cam_02) : rclcpp::Node("camera_publisher") {                                                                                    
+    Publisher(bupt_rc_cv_interfaces::msg::CVCamera* cameras[]) : rclcpp::Node("camera_publisher"){                                                      
+        for (int i = 0; i < 2; ++i) {
+            this->cameras_[i] = cameras[i];
+        }
+
         this->publisher_ = this->create_publisher<bupt_rc_cv_interfaces::msg::CVCameraArray>("bupt_rc_cv/cameras", 1);
-        this->cam_01_ = cam_01;
-        this->cam_02_ = cam_02;
-        this->timer_ = this->create_wall_timer(10ms, std::bind(&CamerasPublisher::timer_callback, this));
+        this->timer_ = this->create_wall_timer(10ms, std::bind(&Publisher::timer_callback, this));
     }
 
-    ~CamerasPublisher() {
-        this->cam_01_->stop();
-        this->cam_02_->stop();
+    ~Publisher() {
     }
 
     void spin(){
@@ -44,41 +46,20 @@ public:
             if (kbhit()) {
                 key = getchar();
                 if (key == 'q') {
+                    capture_frame_stop = true;
                     break;  // 按下 'q' 键退出循环
                 }
             }
         }
         tcsetattr(STDIN_FILENO, TCSANOW, &old_settings);
     }
-
 private:
     void timer_callback() {
-        auto message = bupt_rc_cv_interfaces::msg::CVCameraArray();
-
-        auto message_cam_01 = bupt_rc_cv_interfaces::msg::CVCamera();
-        auto message_cam_02 = bupt_rc_cv_interfaces::msg::CVCamera();
-
-        cv::Mat frame_01 = this->cam_01_->get_frame();
-        cv::Mat frame_02 = this->cam_02_->get_frame();
-        
-        message_cam_01.img.frame_data.assign(frame_01.data, frame_01.data + frame_01.total() * frame_01.elemSize());
-        message_cam_01.img.frame_width = frame_01.cols;
-        message_cam_01.img.frame_height = frame_01.rows;
-        message_cam_01.cam_fps = 30.0;
-        message_cam_01.cam_name = this->cam_01_->get_cam_name();
-        message_cam_01.cam_type = this->cam_01_->get_cam_type();
-
-        message_cam_02.img.frame_data.assign(frame_02.data, frame_02.data + frame_02.total() * frame_02.elemSize());
-        message_cam_02.img.frame_width = frame_02.cols;
-        message_cam_02.img.frame_height = frame_02.rows;
-        message_cam_02.cam_fps = 30.0;
-        message_cam_02.cam_name = this->cam_02_->get_cam_name();
-        message_cam_02.cam_type = this->cam_02_->get_cam_type();
-        
-        message.cameras.push_back(message_cam_01);
-        message.cameras.push_back(message_cam_02);
-
-        this->publisher_->publish(message);
+        auto cameras_array = bupt_rc_cv_interfaces::msg::CVCameraArray();
+        for (int i = 0; i < 2; ++i) {
+            cameras_array.cameras.push_back(*this->cameras_[i]);
+        }
+        this->publisher_->publish(cameras_array);
     }
 
     int kbhit(){
@@ -99,32 +80,65 @@ private:
 private:
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<bupt_rc_cv_interfaces::msg::CVCameraArray>::SharedPtr publisher_;
-    cameras* cam_01_;
-    cameras* cam_02_;
+    bupt_rc_cv_interfaces::msg::CVCamera* cameras_[2];
+
 };
 
+void publisher_thread_func(bupt_rc_cv_interfaces::msg::CVCamera* cameras[]) {
+    Publisher camera_publish_node(cameras);
+    camera_publish_node.spin();
+    rclcpp::shutdown();
+}
+
+void camera_thread_func(bupt_rc_cv_interfaces::msg::CVCamera* message) {
+    cameras cam(config_path);
+    CAMERAS_CHECK(cam.open(), cam.get_cam_name() + " open fail");
+    CAMERAS_CHECK(cam.start(), cam.get_cam_name() + " start fail");
+
+    while (true) {
+        if (capture_frame_stop)
+            break;
+        cv::Mat frame = cam.get_frame();
+        if (frame.empty())
+            continue;
+
+        // 装填数据
+        message->img.frame_data.assign(frame.data, frame.data + frame.total() * frame.elemSize());
+        message->img.frame_width = frame.cols;
+        message->img.frame_height = frame.rows;
+        message->cam_fps = cam.get_fps();
+        message->cam_name = cam.get_cam_name();
+        message->cam_type = cam.get_cam_type();
+    }
+    cam.stop();
+}
 
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
+    const int camera_num = 2;
+    std::thread threads[camera_num + 1];
+    cv::Mat frame[camera_num];
+    bupt_rc_cv_interfaces::msg::CVCamera message[2];
+    bupt_rc_cv_interfaces::msg::CVCamera* message_ptr[2];
+    
 
     std::cout << "-----------------------------------------------------------" << std::endl;
     std::cout << "|                    press [q] to exit                    |" << std::endl;
     std::cout << "-----------------------------------------------------------" << std::endl;
 
 
-    // 打开和开启相机
     try {
-        cameras cam_01(config_path);
-        CAMERAS_CHECK(cam_01.open(), cam_01.get_cam_name() + " open fail");
-        CAMERAS_CHECK(cam_01.start(), cam_01.get_cam_name() + "start fail");
+        for (int i = 0; i < camera_num; ++i) {
+            threads[i] = std::thread(camera_thread_func, &message[i]);
+            message_ptr[i] = &message[i];
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+        }
+        threads[camera_num] = std::thread(publisher_thread_func, message_ptr);
 
-        cameras cam_02(config_path);
-        CAMERAS_CHECK(cam_02.open(), cam_02.get_cam_name() + " open fail");
-        CAMERAS_CHECK(cam_02.start(), cam_02.get_cam_name() + "start fail");
-        CamerasPublisher node_cams_publisher(&cam_01, &cam_02);
+        for (int i = 0; i < camera_num + 1; ++i) {
+            threads[i].join();
+        }
 
-        node_cams_publisher.spin();
-        rclcpp::shutdown();
     }
     catch (const std::exception& e) {
         std::cout << "[BUPT_RC]Exception caught: " << e.what() << std::endl;
